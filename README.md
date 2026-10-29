@@ -10,9 +10,7 @@ Runs entirely in the browser via HTML canvas (no upload to a server).
 
 ## Use online
 
-After GitHub Pages is enabled:
-
-`https://<your-github-user>.github.io/omni-png-webp-converter/`
+https://windstrikeone.github.io/omni-png-webp-converter/
 
 ## Run locally
 
