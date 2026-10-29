@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>convert webp to png by canvas</title>
+        <title>Omni PNG ↔ WebP Converter</title>
         <style>
             * {
                 padding: 0;
@@ -21,17 +21,26 @@
             canvas {
                 position: relative;
                 z-index: 2;
+                max-width: 100%;
+                height: auto;
             }
             .tips {
                 text-align: center;
                 height: 100px;
                 line-height: 100px;
-                background: red;
+                background: #c62828;
                 color: #fff;
                 font-weight: bold;
+                transition: background 0.2s ease;
+            }
+            .tips.success {
+                background: #2e7d32;
+            }
+            .tips.error {
+                background: #b71c1c;
             }
             .tips b {
-                color: blue;
+                color: #90caf9;
             }
             #fileInput {
                 display: none;
@@ -40,48 +49,124 @@
     </head>
     <body ondrop="dropHandler(event)" ondragover="dragOverHandler(event)">
         <div class="page">
-            <div class="tips">Double click upload or dragdrop <b>webp/avif/svg/...</b> image file to convert!</div>
-            <input type="file" id="fileInput" accept="image/*" />
+            <div class="tips" id="tips">
+                Double click or drag &amp; drop a <b>PNG</b> or <b>WebP</b> file — direction is automatic
+            </div>
+            <input type="file" id="fileInput" accept="image/png,image/webp,.png,.webp" />
             <canvas id="canvas"></canvas>
         </div>
         <script>
-            function drawImage(img) {
+            var WEBP_QUALITY = 0.92;
+            var tipsEl = document.getElementById('tips');
+            var defaultTips = tipsEl.innerHTML;
+
+            function setStatus(message, kind) {
+                tipsEl.className = 'tips' + (kind ? ' ' + kind : '');
+                tipsEl.innerHTML = message;
+            }
+
+            function detectFormat(file) {
+                var type = (file.type || '').toLowerCase();
+                var name = (file.name || '').toLowerCase();
+                if (type === 'image/webp' || name.endsWith('.webp')) {
+                    return 'webp';
+                }
+                if (type === 'image/png' || name.endsWith('.png')) {
+                    return 'png';
+                }
+                return null;
+            }
+
+            function stemName(filename) {
+                var base = filename || 'converted';
+                var dot = base.lastIndexOf('.');
+                return dot > 0 ? base.slice(0, dot) : base;
+            }
+
+            function downloadBlob(blob, filename) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function () {
+                    URL.revokeObjectURL(url);
+                }, 1000);
+            }
+
+            function convertAndDownload(img, sourceFormat, originalName) {
                 var canvas = document.getElementById('canvas');
                 canvas.width = img.width;
                 canvas.height = img.height;
                 var ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(img, 0, 0);
-                setTimeout(function () {
-                    alert('Convert finished, please right click image, use "Save as..." save!');
-                }, 100);
+
+                var targetFormat = sourceFormat === 'webp' ? 'png' : 'webp';
+                var mime = targetFormat === 'png' ? 'image/png' : 'image/webp';
+                var quality = targetFormat === 'webp' ? WEBP_QUALITY : undefined;
+                var outName = stemName(originalName) + '.' + targetFormat;
+                var fromLabel = sourceFormat === 'webp' ? 'WebP' : 'PNG';
+                var toLabel = targetFormat === 'webp' ? 'WebP' : 'PNG';
+
+                canvas.toBlob(
+                    function (blob) {
+                        if (!blob) {
+                            setStatus('Encode failed — try another browser or file.', 'error');
+                            return;
+                        }
+                        downloadBlob(blob, outName);
+                        setStatus('Converted <b>' + fromLabel + ' → ' + toLabel + '</b>', 'success');
+                    },
+                    mime,
+                    quality
+                );
             }
+
             function processFile(file) {
+                if (!file) {
+                    return;
+                }
+
+                var format = detectFormat(file);
+                if (!format) {
+                    setStatus('Only <b>PNG</b> and <b>WebP</b> are supported.', 'error');
+                    return;
+                }
+
+                setStatus('Converting…');
+                var objectUrl = URL.createObjectURL(file);
                 var img = document.createElement('img');
-                img.src = window.URL.createObjectURL(file);
                 img.onload = function () {
-                    drawImage(img);
+                    URL.revokeObjectURL(objectUrl);
+                    convertAndDownload(img, format, file.name);
                 };
                 img.onerror = function () {
-                    alert('Load image fail!');
+                    URL.revokeObjectURL(objectUrl);
+                    setStatus('Failed to load image.', 'error');
                 };
+                img.src = objectUrl;
             }
+
             function dropHandler(event) {
-                // Prevent default behavior (Prevent file from being opened)
                 event.preventDefault();
                 if (event.dataTransfer.files.length > 0) {
-                    var file = event.dataTransfer.files[0];
-                    processFile(file);
+                    processFile(event.dataTransfer.files[0]);
                 } else {
-                    alert('Drag data item kind is not file, please check!');
+                    setStatus('Drop a file, not other drag data.', 'error');
                 }
             }
+
             function dragOverHandler(event) {
-                // Prevent default behavior (Prevent file from being opened)
                 event.preventDefault();
             }
+
             var fileInput = document.getElementById('fileInput');
             fileInput.addEventListener('change', function () {
                 processFile(this.files[0]);
+                this.value = '';
             });
             window.addEventListener('dblclick', function () {
                 fileInput.click();
